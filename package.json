@@ -1,0 +1,51 @@
+{
+  "name": "cosmic-verification-platform",
+  "version": "1.0.0",
+  "description": "A modern frontend-only verification application built with Next.js, featuring document verification services with a clean, responsive interface.",
+  "homepage": "https://github.com/dhruv6218/repo-repo#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dhruv6218/repo-repo.git"
+  },
+  "keywords": [
+    "nextjs",
+    "typescript",
+    "tailwindcss",
+    "verification",
+    "document-verification",
+    "aadhaar",
+    "pan",
+    "gst",
+    "passport",
+    "frontend",
+    "static-export",
+    "vercel",
+    "netlify"
+  ],
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit",
+    "export": "next build && next export",
+    "deploy": "npm run build && npm run export"
+  },
+  "dependencies": {
+    "next": "14.2.15",
+    "react": "^18",
+    "react-dom": "^18",
+    "lucide-react": "^0.446.0"
+  },
+  "devDependencies": {
+    "typescript": "^5",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.15"
+  }
+}
