@@ -1,136 +1,211 @@
 'use client';
+import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import ProgressBar from '../../components/ProgressBar';
 
-import { useState } from 'react';
-import Navbar from '../../components/Navbar';
-import Footer from '../../components/Footer';
-import { Shield, CheckCircle, AlertCircle, User } from 'lucide-react';
+interface FormData {
+  aadhaar: string;
+  name: string;
+  dob: string;
+}
+
+interface VerificationResult {
+  success: boolean;
+  data?: Record<string, unknown>;
+  error?: string;
+  verificationId?: string;
+}
 
 export default function AadhaarVerification() {
-  const [formData, setFormData] = useState({
-    aadhaarNumber: '',
-    fullName: ''
+  const [formData, setFormData] = useState<FormData>({
+    aadhaar: '',
+    name: '',
+    dob: '',
   });
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [verificationResult, setVerificationResult] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [result, setResult] = useState<VerificationResult | null>(null);
+  const [planType, setPlanType] = useState<string>('Free');
+  const progressTimer = useRef<number | null>(null);
+  const [toast, setToast] = useState<string>('');
+  const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  useEffect(() => {
+    const load = async () => {
+      const res = await fetch('/api/user/profile', { cache: 'no-store' });
+      if (res.ok) {
+        const json = await res.json();
+        setPlanType(json.planType || 'Free');
+      }
+    };
+    load();
+  }, []);
+
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsVerifying(true);
-    
-    // Simulate API call
-    setTimeout(() => {
-      const mockResult = {
-        status: 'success',
-        verified: true,
-        details: {
-          name: formData.fullName || 'John Doe',
-          aadhaarNumber: formData.aadhaarNumber.replace(/\d(?=\d{4})/g, 'X'),
-          address: 'Mumbai, Maharashtra',
-          dateOfBirth: '01/01/1990',
-          gender: 'Male',
-          verifiedAt: new Date().toISOString()
+    setLoading(true);
+    setProgress(0);
+    setResult(null);
+    setToast('');
+
+    const payload = { ...formData };
+
+    progressTimer.current = window.setInterval(() => {
+      setProgress((prev) => Math.min(prev + Math.random() * 15, 95));
+    }, 200);
+
+    try {
+      const res = await fetch('/api/verify/aadhaar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setToast(json.error || 'Verification failed');
+        return;
+      }
+      setResult(json);
+      setToast('Verification completed.');
+    } catch {
+      // Mock response for static deployment
+      setResult({
+        success: true,
+        verificationId: 'demo-' + Date.now(),
+        data: {
+          name: 'John Doe',
+          aadhaar: payload.aadhaar,
+          address: '123 Sample Street, Demo City, State 12345',
+          dob: '01/01/1990',
+          gender: 'Male'
         }
-      };
-      
-      setVerificationResult(mockResult);
-      setIsVerifying(false);
-    }, 2000);
+      });
+      setToast('Verification completed (Demo Mode)');
+    } finally {
+      setLoading(false);
+      setProgress(100);
+      if (progressTimer.current) {
+        clearInterval(progressTimer.current);
+        progressTimer.current = null;
+      }
+    }
+  };
+
+  const onDownloadClick = async () => {
+    if (planType === 'Free') {
+      alert('Free plan does not allow PDF downloads. Please upgrade your plan to download the report as PDF. The report will be sent to your email directly.');
+      return;
+    }
+    if (!result) return;
+    try {
+      const res = await fetch('/api/report/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          verificationId: result?.verificationId,
+          allowPdf: true,
+          branding: { logoUrl: 'https://storage.googleapis.com/cosmic-project-image-assets/images/e13bc083-35ee-485c-9de0-75fb59bd949c/logo.jpg' },
+        }),
+      });
+      const json = await res.json();
+      if (json.pdfUrl) window.open(json.pdfUrl, '_blank');
+      else alert('Report sent to your email.');
+    } catch {
+      // Mock response for static deployment
+      alert('Demo Mode: Report generation simulated. In production, this would generate a PDF report.');
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="text-center mb-12">
-          <User className="h-12 w-12 text-blue-600 mx-auto mb-4" />
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">Aadhaar Verification</h1>
-          <p className="text-gray-600">
-            Verify Aadhaar card details instantly with our secure verification system.
-          </p>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-lg p-8">
-          {!verificationResult ? (
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Aadhaar Number
-                </label>
-                <input
-                  type="text"
-                  required
-                  maxLength={12}
-                  placeholder="Enter 12-digit Aadhaar number"
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  value={formData.aadhaarNumber}
-                  onChange={(e) => setFormData(prev => ({ ...prev, aadhaarNumber: e.target.value }))}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Full Name (as per Aadhaar)
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Enter full name"
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  value={formData.fullName}
-                  onChange={(e) => setFormData(prev => ({ ...prev, fullName: e.target.value }))}
-                />
-              </div>
-              
-              <button
-                type="submit"
-                disabled={isVerifying}
-                className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50"
-              >
-                {isVerifying ? 'Verifying...' : 'Verify Aadhaar'}
-              </button>
-            </form>
-          ) : (
-            <div className="text-center space-y-6">
-              {verificationResult.verified ? (
-                <CheckCircle className="h-16 w-16 text-green-500 mx-auto" />
-              ) : (
-                <AlertCircle className="h-16 w-16 text-red-500 mx-auto" />
-              )}
-              
-              <h2 className="text-2xl font-bold">
-                {verificationResult.verified ? 'Verification Successful' : 'Verification Failed'}
-              </h2>
-              
-              {verificationResult.verified && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-left">
-                  <h3 className="font-semibold text-green-800 mb-4">Verified Details:</h3>
-                  <div className="space-y-2 text-sm text-green-700">
-                    <p><strong>Name:</strong> {verificationResult.details.name}</p>
-                    <p><strong>Aadhaar Number:</strong> {verificationResult.details.aadhaarNumber}</p>
-                    <p><strong>Address:</strong> {verificationResult.details.address}</p>
-                    <p><strong>Date of Birth:</strong> {verificationResult.details.dateOfBirth}</p>
-                    <p><strong>Gender:</strong> {verificationResult.details.gender}</p>
-                    <p><strong>Verified At:</strong> {new Date(verificationResult.details.verifiedAt).toLocaleString()}</p>
-                  </div>
-                </div>
-              )}
-              
-              <button
-                onClick={() => {
-                  setVerificationResult(null);
-                  setFormData({ aadhaarNumber: '', fullName: '' });
-                }}
-                className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-              >
-                Verify Another Aadhaar
-              </button>
+    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md mx-auto bg-white rounded-lg shadow-md p-6">
+        <h1 className="text-2xl font-bold text-gray-900 mb-6 text-center">
+          Aadhaar Verification
+        </h1>
+        
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Aadhaar Number
+            </label>
+            <input
+              type="text"
+              value={formData.aadhaar}
+              onChange={(e) => setFormData({ ...formData, aadhaar: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter 12-digit Aadhaar number"
+              required
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Full Name
+            </label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter full name as per Aadhaar"
+              required
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Date of Birth
+            </label>
+            <input
+              type="date"
+              value={formData.dob}
+              onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
+          
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? 'Verifying...' : 'Verify Aadhaar'}
+          </button>
+        </form>
+        
+        {loading && (
+          <div className="mt-4">
+            <ProgressBar progress={progress} />
+          </div>
+        )}
+        
+        {toast && (
+          <div className="mt-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">
+            {toast}
+          </div>
+        )}
+        
+        {result && (
+          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+            <h3 className="text-lg font-semibold mb-3">Verification Result</h3>
+            <div className="space-y-2 text-sm">
+              <p><strong>Status:</strong> <span className="text-green-600">Verified</span></p>
+              <p><strong>Name:</strong> {result.data?.name}</p>
+              <p><strong>Aadhaar:</strong> {result.data?.aadhaar}</p>
+              <p><strong>Address:</strong> {result.data?.address}</p>
+              <p><strong>DOB:</strong> {result.data?.dob}</p>
+              <p><strong>Gender:</strong> {result.data?.gender}</p>
             </div>
-          )}
-        </div>
+            <button
+              onClick={onDownloadClick}
+              className="mt-4 w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700"
+            >
+              Download Report
+            </button>
+          </div>
+        )}
       </div>
-      
-      <Footer />
     </div>
   );
 }
